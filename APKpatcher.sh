@@ -1,5 +1,10 @@
 #!/data/data/com.termux/files/usr/bin/bash
 
+# Tool name : APKpatcher
+# Author    : Alienkrishn [Anon4You]
+# Copyright : © Alienkrishn
+# GitHub    : https://github.com/Anon4You/APKpatcher.git
+
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -444,6 +449,7 @@ main() {
                 ;;
         esac
         echo "Join telegram - https://t.me/nullxvoid/"
+        exit 0
     done
 }
 
