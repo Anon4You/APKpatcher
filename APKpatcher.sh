@@ -32,16 +32,22 @@ show_banner() {
     echo -e "${CYAN}══════════════════════════════════════${NC}\n"
 }
 
+# Fixed spinner function
 spinner() {
-    local pid=$!
+    local pid=$1
     local delay=0.1
-    local spinstr='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
+    local spinstr='|/-\\'
     while [ -d /proc/$pid ]; do
-        local temp=${spinstr#?}
-        printf "\r${YELLOW}[%c]${NC} Processing..." "$spinstr"
-        spinstr=$temp${spinstr%"$temp"}
-        sleep $delay
+        for ((i=0; i<${#spinstr}; i++)); do
+            printf "\r${YELLOW}[%c]${NC} Processing..." "${spinstr:$i:1}"
+            # Force output flush
+            echo -n "" >/dev/tty
+            sleep $delay
+            # Break early if process is done
+            [ -d /proc/$pid ] || break
+        done
     done
+    # Clear the spinner line
     printf "\r%-30s\r" " "
 }
 
@@ -71,14 +77,14 @@ check_dependencies() {
 sign_apk() {
     local input_apk=$1
     local output_apk="${input_apk%.*}_signed.apk"
-    local keystore="$PREFIX/apkpatcher/key/apkpatcher.keystore"
+    local keystore="$PREFIX/share/apkpatcher/key/apkpatcher.keystore"
     local alias="apkpatcher"
     local password="apkpatcher"
 
     echo -e "${YELLOW}[*]${NC} ${BOLD}Generating/Checking Keystore${NC}"
     if [ ! -f "$keystore" ]; then
-        (keytool -genkey -v -keystore "$keystore" -alias "$alias" -keyalg RSA -keysize 2048 -validity 10000 -storepass "$password" -keypass "$password" -dname "CN=apkpatcher, OU=apkpatcher, O=apkpatcher, L=Unknown, ST=Unknown, C=IN" > /dev/null 2>&1) &
-        spinner
+        keytool -genkey -v -keystore "$keystore" -alias "$alias" -keyalg RSA -keysize 2048 -validity 10000 -storepass "$password" -keypass "$password" -dname "CN=apkpatcher, OU=apkpatcher, O=apkpatcher, L=Unknown, ST=Unknown, C=IN" > /dev/null 2>&1 &
+        spinner $!
         echo -e "${GREEN}[+]${NC} Keystore generated"
     else
         echo -e "${GREEN}[+]${NC} Keystore found"
@@ -86,12 +92,12 @@ sign_apk() {
 
     echo -e "${YELLOW}[*]${NC} ${BOLD}Signing APK${NC}"
     if command -v apksigner >/dev/null 2>&1; then
-        (apksigner sign --ks "$keystore" --ks-pass pass:"$password" --ks-key-alias "$alias" --key-pass pass:"$password" --out "$output_apk" "$input_apk" > /dev/null 2>&1) &
-        spinner
+        apksigner sign --ks "$keystore" --ks-pass pass:"$password" --ks-key-alias "$alias" --key-pass pass:"$password" --out "$output_apk" "$input_apk" > /dev/null 2>&1 &
+        spinner $!
         echo -e "${GREEN}[+]${NC} Signed with apksigner"
     else
-        (jarsigner -verbose -sigalg SHA1withRSA -digestalg SHA1 -keystore "$keystore" -storepass "$password" -keypass "$password" "$input_apk" "$alias" > /dev/null 2>&1) &
-        spinner
+        jarsigner -verbose -sigalg SHA1withRSA -digestalg SHA1 -keystore "$keystore" -storepass "$password" -keypass "$password" "$input_apk" "$alias" > /dev/null 2>&1 &
+        spinner $!
         mv "$input_apk" "$output_apk"
         echo -e "${GREEN}[+]${NC} Signed with jarsigner"
     fi
@@ -108,8 +114,8 @@ merge_apk() {
     local output_apk=$2
 
     echo -e "${YELLOW}[*]${NC} ${BOLD}Merging APK${NC}"
-    (apkeditor m -i "$input_apk" -o "$output_apk" > /dev/null 2>&1) &
-    spinner
+    apkeditor m -i "$input_apk" -o "$output_apk" > /dev/null 2>&1 &
+    spinner $!
 
     if [ ! -f "$output_apk" ]; then
         echo -e "${RED}[!]${NC} ${BOLD}Error: Failed to merge APK${NC}"
@@ -120,8 +126,8 @@ merge_apk() {
 
 decompile_apk() {
     echo -e "${YELLOW}[*]${NC} ${BOLD}Decompiling APK${NC}"
-    (apkeditor d -i "$TARGET_APK" -o target > /dev/null 2>&1) &
-    spinner
+    apkeditor d -i "$TARGET_APK" -o target > /dev/null 2>&1 &
+    spinner $!
 
     if [ ! -d "target" ]; then
         echo -e "${RED}[!]${NC} ${BOLD}Error: Failed to decompile APK${NC}"
@@ -183,14 +189,14 @@ inject_colored_toast() {
     echo -e "${WHITE}1) White (#FFFFFF)${NC}"
     echo -e "${RED}2) Red (#FF0000)${NC}"
     echo -e "${BLUE}3) Blue (#0000FF)${NC}"
-    echo -e "${YELLOW}4) Yellow (#FFEA00)${NC}"
-    echo -e "${GREEN}5) Green (#00FF00)${NC}"
+    echo -e "${YELLOW}4) Yellow (#FFFF00)${NC}"
+    echo -e "${GREEN}5) Green (#008000)${NC}"
     echo -e "${BLACK}6) Black (#000000)${NC}"
-    echo -e "${PINK}7) Pink (#FF19BE)${NC}"
-    echo -e "${ORANGE}8) Orange (#FF8400)${NC}"
-    echo -e "${LIME}9) Lime (#00FF00)${NC}"
+    echo -e "${PINK}7) Pink (#FF69B4)${NC}"
+    echo -e "${ORANGE}8) Orange (#FFA500)${NC}"
+    echo -e "${LIME}9) Lime (#32CD32)${NC}"
     echo -e "${TEAL}10) Teal (#008080)${NC}"
-    echo -e "${VIOLET}11) Violet (#EE82EE)${NC}"
+    echo -e "${VIOLET}11) Violet (#8A2BE2)${NC}"
     echo -e "${GOLD}12) Gold (#FFD700)${NC}"
     echo -e "${SILVER}13) Silver (#C0C0C0)${NC}"
     
@@ -199,14 +205,14 @@ inject_colored_toast() {
         1) COLOR_CODE="#FFFFFF" ;;
         2) COLOR_CODE="#FF0000" ;;
         3) COLOR_CODE="#0000FF" ;;
-        4) COLOR_CODE="#FFEA00" ;;
-        5) COLOR_CODE="#00FF00" ;;
+        4) COLOR_CODE="#FFFF00" ;;
+        5) COLOR_CODE="#008000" ;;
         6) COLOR_CODE="#000000" ;;
-        7) COLOR_CODE="#FF19BE" ;;
-        8) COLOR_CODE="#FF8400" ;;
-        9) COLOR_CODE="#00FF00" ;;
+        7) COLOR_CODE="#FF69B4" ;;
+        8) COLOR_CODE="#FFA500" ;;
+        9) COLOR_CODE="#32CD32" ;;
         10) COLOR_CODE="#008080" ;;
-        11) COLOR_CODE="#EE82EE" ;;
+        11) COLOR_CODE="#8A2BE2" ;;
         12) COLOR_CODE="#FFD700" ;;
         13) COLOR_CODE="#C0C0C0" ;;
         *) COLOR_CODE="#FFFFFF" ;;
@@ -303,8 +309,8 @@ bypass_signature() {
 
 rebuild_apk() {
     echo -e "${YELLOW}[*]${NC} ${BOLD}Rebuilding APK${NC}"
-    (apkeditor b -i target -o "$OUTPUT_APK" > /dev/null 2>&1) &
-    spinner
+    apkeditor b -i target -o "$OUTPUT_APK" > /dev/null 2>&1 &
+    spinner $!
 
     if [ ! -f "$OUTPUT_APK" ]; then
         echo -e "${RED}[!]${NC} ${BOLD}Error: Failed to rebuild APK${NC}"
@@ -314,9 +320,7 @@ rebuild_apk() {
 }
 
 cleanup() {
-    echo -e "${YELLOW}[*]${NC} ${BOLD}Cleaning Up${NC}"
     rm -rf target "$OUTPUT_APK" "${OUTPUT_APK%.*}_signed.apk.idsig" 2>/dev/null
-    echo -e "${GREEN}[+]${NC} Temporary files removed"
 }
 
 main() {
@@ -425,7 +429,7 @@ main() {
                 
                 decompile_apk || continue
                 find_launcher_activity || continue
-                inject_dialog
+                inject_dialog || continue
                 rebuild_apk || continue
                 sign_apk "$OUTPUT_APK"
                 cleanup
@@ -439,7 +443,7 @@ main() {
                 echo -e "${RED}[!]${NC} ${BOLD}Error: Invalid choice${NC}"
                 ;;
         esac
-        read -p "Press Enter to continue..."
+        echo "Join telegram - https://t.me/nullxvoid/"
     done
 }
 
