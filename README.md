@@ -77,4 +77,4 @@ Redistribution and use in source and binary forms are permitted provided that th
 ## 🌐 Support
 
 For support and feature requests:  
-[https://t.me/+oa9G82abaTAwYWVl](https://t.me/+dP5jU8dW3uxiYTZl)
+https://t.me/alienkrishn
