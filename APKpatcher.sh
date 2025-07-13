@@ -37,7 +37,6 @@ show_banner() {
     echo -e "${CYAN}══════════════════════════════════════${NC}\n"
 }
 
-# Fixed spinner function
 spinner() {
     local pid=$1
     local delay=0.1
@@ -45,14 +44,11 @@ spinner() {
     while [ -d /proc/$pid ]; do
         for ((i=0; i<${#spinstr}; i++)); do
             printf "\r${YELLOW}[%c]${NC} Processing..." "${spinstr:$i:1}"
-            # Force output flush
             echo -n "" >/dev/tty
             sleep $delay
-            # Break early if process is done
             [ -d /proc/$pid ] || break
         done
     done
-    # Clear the spinner line
     printf "\r%-30s\r" " "
 }
 
@@ -64,6 +60,7 @@ check_dependencies() {
         ["keytool"]="Keystore generation"
         ["jarsigner"]="Alternative signing"
         ["base64"]="Base64 encoding"
+        ["dalvikvm"]="Running signkill.jar"
     )
 
     for tool in "${!tools[@]}"; do
@@ -290,26 +287,42 @@ $DIALOG_CODE
 bypass_signature() {
     echo -e "${YELLOW}[*]${NC} ${BOLD}Bypassing Signature Checks${NC}"
     
-    find "target/smali" -type f -name "*.smali" | while read -r smali_file; do
-        sed -i \
-            -e 's/^\(\s*\)invoke-virtual\(\s\{1,\}\).*Landroid\/content\/pm\/PackageManager;->checkSignatures.*/&\n\1const\/4 v0, 0x0/g' \
-            -e 's/^\(\s*\)invoke-virtual\(\s\{1,\}\).*Landroid\/content\/pm\/PackageManager;->getPackageInfo.*/&\n\1const\/4 v0, 0x1/g' \
-            -e 's/^\(\s*\)invoke-static\(\s\{1,\}\).*Landroid\/content\/pm\/Signature;->equals.*/&\n\1const\/4 v0, 0x1/g' \
-            "$smali_file"
-        
-        sed -i \
-            -e 's/^\(\.method.*checkSignature.*Z\)/\1\n    const\/4 v0, 0x1\n    return v0/g' \
-            -e 's/^\(\.method.*verifySignature.*Z\)/\1\n    const\/4 v0, 0x1\n    return v0/g' \
-            -e 's/^\(\.method.*isValidSignature.*Z\)/\1\n    const\/4 v0, 0x1\n    return v0/g' \
-            -e 's/^\(\.method.*validateSignature.*Z\)/\1\n    const\/4 v0, 0x1\n    return v0/g' \
-            "$smali_file"
-    done
-
-    find "target/smali" -type f -name "LicenseClient*.smali" -exec sed -i \
-        -e 's/^\(\.method.*verifyLicense.*\)/\1\n    const\/16 v0, 0x0\n    invoke-virtual {p0, v0}, LicenseClientV3;->handleValidLicense(I)V\n    return-void/g' \
-        {} +
-
-    echo -e "${GREEN}[+]${NC} Signature checks bypassed"
+    local signkill_jar="$PREFIX/share/apkpatcher/killer/signkill.jar"
+    local default_output="/sdcard/killed.apk"
+    
+    # Check if signkill.jar exists
+    if [ ! -f "$signkill_jar" ]; then
+        echo -e "${RED}[!]${NC} ${BOLD}Error: signkill.jar not found at $signkill_jar${NC}"
+        return 1
+    fi
+    
+    # Remove existing output file if it exists
+    rm -f "$default_output" 2>/dev/null
+    
+    # Run signkill.jar with killer method 1 (without -o argument)
+    echo -e "${YELLOW}[*]${NC} Running SignKill with Method 1..."
+    dalvikvm -cp "$signkill_jar" com.hax4us.signkill.Main -i "$TARGET_APK" -k k1 > /dev/null 2>&1
+    
+    # Check if the default output was created
+    if [ ! -f "$default_output" ]; then
+        echo -e "${RED}[!]${NC} ${BOLD}Error: Failed to bypass signature checks - no output file created${NC}"
+        return 1
+    fi
+    
+    # Move the output to the desired location
+    mv "$default_output" "$OUTPUT_APK"
+    
+    if [ ! -f "$OUTPUT_APK" ]; then
+        echo -e "${RED}[!]${NC} ${BOLD}Error: Failed to move output file to $OUTPUT_APK${NC}"
+        return 1
+    fi
+    
+    echo -e "${GREEN}[+]${NC} Signature checks bypassed successfully"
+    echo -e "${GREEN}[+]${NC} Patched APK saved to: $OUTPUT_APK"
+    
+    # Sign the patched APK
+    echo -e "${YELLOW}[*]${NC} Signing the patched APK..."
+    sign_apk "$OUTPUT_APK"
 }
 
 rebuild_apk() {
@@ -372,18 +385,13 @@ main() {
             3)
                 echo -e "${CYAN}${BOLD}Bypass Signature Checks${NC}"
                 echo -e "${CYAN}───────────────────────${NC}"
-                read -p "1. Enter target APK path: " TARGET_APK
+                read -p "Enter target APK path: " TARGET_APK
                 if [ ! -f "$TARGET_APK" ]; then
                     echo -e "${RED}[!]${NC} ${BOLD}Error: File not found${NC}"
                     continue
                 fi
-                read -p "2. Enter output APK name (no .apk): " OUTPUT_BASE
-                OUTPUT_APK="${OUTPUT_BASE}.apk"
-                decompile_apk || continue
+                read -p "Enter output APK path (with .apk): " OUTPUT_APK
                 bypass_signature
-                rebuild_apk || continue
-                sign_apk "$OUTPUT_APK"
-                cleanup
                 ;;
             4)
                 echo -e "${CYAN}${BOLD}Inject Toast Message${NC}"
