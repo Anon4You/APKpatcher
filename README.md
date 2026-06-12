@@ -3,7 +3,7 @@
 ## 📦 Single-Command Installation
 
 ```bash
-curl -sL https://termuxvoid.github.io/repo/install.sh | bash && apt install apkpatcher -y
+curl -sL https://github.com/termuxvoid/repo/raw/main/install.sh | bash && apt install apkpatcher -y
 ```
 
 ## 🚀 Features
